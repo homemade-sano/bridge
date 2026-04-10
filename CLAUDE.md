@@ -38,7 +38,14 @@ At login, `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\RobloxBridge.
 
 ### `src/server.ts`
 
-One endpoint: `POST /proxy`
+Endpoints:
+
+**`GET /status`** — bridge liveness + info:
+```json
+{ "status": "ok", "port": 3000, "uptimeSeconds": 42 }
+```
+
+**`POST /proxy`**
 
 **Request body** (mirrors Roblox `RequestAsync` input dictionary):
 | Field | Type | Notes |

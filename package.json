@@ -6,7 +6,8 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/server.js",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "deploy": "npm run build && pm2 restart bridge bridge-tray"
   },
   "keywords": [],
   "author": "",

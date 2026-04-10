@@ -86,6 +86,16 @@ app.post("/proxy", async (req: Request, res: Response) => {
 
 app.get("/health", (_req: Request, res: Response) => res.sendStatus(200));
 
+const startTime = Date.now();
+
+app.get("/status", (_req: Request, res: Response) => {
+  res.json({
+    status: "ok",
+    port: PORT,
+    uptimeSeconds: Math.floor((Date.now() - startTime) / 1000),
+  });
+});
+
 app.listen(PORT, "127.0.0.1", () => {
   console.log(`Bridge running on http://127.0.0.1:${PORT}`);
 });
