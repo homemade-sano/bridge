@@ -24,12 +24,17 @@ app.use(express_1.default.json());
 //   StatusMessage (string)
 //   Headers       (object)
 //   Body          (string)
+function ts() {
+    return new Date().toISOString();
+}
 app.post("/proxy", async (req, res) => {
     const { Url, Method = "GET", Headers = {}, Body, Compress, Timeout } = req.body;
     if (!Url) {
+        console.warn(`[${ts()}] [POST /proxy] 400 missing Url`);
         res.status(400).json({ error: "Url is required" });
         return;
     }
+    console.log(`[${ts()}] [POST /proxy] → ${Method} ${Url}`);
     try {
         const axiosConfig = {
             url: Url,
@@ -50,6 +55,7 @@ app.post("/proxy", async (req, res) => {
         }
         const response = await (0, axios_1.default)(axiosConfig);
         const statusCode = response.status;
+        console.log(`[${ts()}] [POST /proxy] ← ${statusCode} ${Url}`);
         res.json({
             Success: statusCode >= 200 && statusCode <= 299,
             StatusCode: statusCode,
@@ -60,6 +66,7 @@ app.post("/proxy", async (req, res) => {
     }
     catch (err) {
         // Network-level errors (timeout, unreachable, etc.)
+        console.error(`[${ts()}] [POST /proxy] error ${Url} — ${err.message}`);
         res.status(500).json({
             Success: false,
             StatusCode: 0,
@@ -72,10 +79,12 @@ app.post("/proxy", async (req, res) => {
 app.get("/health", (_req, res) => res.sendStatus(200));
 const startTime = Date.now();
 app.get("/status", (_req, res) => {
+    const uptime = Math.floor((Date.now() - startTime) / 1000);
+    console.log(`[${ts()}] [GET /status] uptime: ${uptime}s`);
     res.json({
         status: "ok",
         port: PORT,
-        uptimeSeconds: Math.floor((Date.now() - startTime) / 1000),
+        uptimeSeconds: uptime,
     });
 });
 app.listen(PORT, "127.0.0.1", () => {
