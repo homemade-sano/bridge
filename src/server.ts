@@ -47,11 +47,19 @@ app.post("/proxy", async (req: Request, res: Response) => {
 
   console.log(`[${ts()}] [POST /proxy] → ${Method} ${Url}`);
 
+  // Extract API key sent by plugin as a bridge-level header, inject into outgoing request
+  const rawApiKey = req.headers["x-api-key"];
+  const apiKey = Array.isArray(rawApiKey) ? rawApiKey[0] : rawApiKey;
+  const outgoingHeaders: Record<string, string> = {
+    ...(apiKey ? { "x-api-key": apiKey } : {}),
+    ...Headers,
+  };
+
   try {
     const axiosConfig: AxiosRequestConfig = {
       url: Url,
       method: Method,
-      headers: Headers,
+      headers: outgoingHeaders,
       // Return raw string so Body is always a string (matching Roblox's response)
       responseType: "text",
       validateStatus: () => true, // never throw on HTTP error codes
