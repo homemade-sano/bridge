@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const axios_1 = __importDefault(require("axios"));
 const config_1 = require("./config");
+const deploy_1 = require("./deploy");
 const app = (0, express_1.default)();
 const PORT = Number(process.env.PORT) || (0, config_1.readConfig)().port || 3000;
 app.use(express_1.default.json());
@@ -35,11 +36,18 @@ app.post("/proxy", async (req, res) => {
         return;
     }
     console.log(`[${ts()}] [POST /proxy] → ${Method} ${Url}`);
+    // Extract API key sent by plugin as a bridge-level header, inject into outgoing request
+    const rawApiKey = req.headers["x-api-key"];
+    const apiKey = Array.isArray(rawApiKey) ? rawApiKey[0] : rawApiKey;
+    const outgoingHeaders = {
+        ...(apiKey ? { "x-api-key": apiKey } : {}),
+        ...Headers,
+    };
     try {
         const axiosConfig = {
             url: Url,
             method: Method,
-            headers: Headers,
+            headers: outgoingHeaders,
             // Return raw string so Body is always a string (matching Roblox's response)
             responseType: "text",
             validateStatus: () => true, // never throw on HTTP error codes
@@ -76,6 +84,7 @@ app.post("/proxy", async (req, res) => {
         });
     }
 });
+app.post("/deploy", deploy_1.handleDeploy);
 app.get("/health", (_req, res) => res.sendStatus(200));
 const startTime = Date.now();
 app.get("/status", (_req, res) => {

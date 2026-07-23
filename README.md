@@ -54,7 +54,19 @@ pm2 save
 
 ## Config
 
-Port stored in `config.json`. Default: `3000`. Override via tray menu or:
+Stored in `config.json`:
+
+```json
+{
+  "port": 3000,
+  "deploy": {
+    "downloadTimeoutMs": 60000,
+    "publishTimeoutMs": 120000
+  }
+}
+```
+
+Port default: `3000`. Override via tray menu or:
 
 ```bash
 PORT=4000 pm2 restart bridge --update-env
@@ -90,6 +102,55 @@ PORT=4000 pm2 restart bridge --update-env
   "Body": "..."
 }
 ```
+
+### POST /deploy
+
+Downloads the source place file (via the locally logged-in Studio session) and
+publishes it to every target place through Open Cloud.
+
+**Headers:** `x-api-key: <Open Cloud API key>` (required)
+
+The API key needs the **`universe-places:write`** scope on **every target
+universe**.
+
+**Request:**
+```json
+{
+  "sourcePlaceId": 123456,
+  "targets": [
+    { "name": "Test/Island", "universeId": 111, "placeId": 222 },
+    { "name": "Test/Mine",   "universeId": 111, "placeId": 333 }
+  ],
+  "versionType": "Published"
+}
+```
+
+- `versionType`: `"Published"` (live immediately) or `"Saved"` (staged version
+  only). Default `"Published"`.
+- Targets are published sequentially, in array order. A failing target does not
+  abort the rest.
+
+**Response** — `200` even with partial failures (caller aggregates `results`):
+```json
+{
+  "ok": true,
+  "sourcePlaceId": 123456,
+  "sourceSizeBytes": 4587520,
+  "versionType": "Published",
+  "results": [
+    { "name": "Test/Island", "placeId": 222, "ok": true,  "versionNumber": 42 },
+    { "name": "Test/Mine",   "placeId": 333, "ok": false, "status": 403, "detail": "API key lacks write scope for universe 111" }
+  ]
+}
+```
+
+Non-200 responses (pre-flight failures only):
+
+| Code | Meaning |
+|------|---------|
+| `400` | Missing `x-api-key`, empty/duplicate targets, target = source, non-numeric ids, unknown `versionType` |
+| `409` | No Roblox Studio session on this machine (open Studio and log in) |
+| `502` | Source place download failed (includes Roblox status + body excerpt) |
 
 ## Roblox Usage
 

@@ -1,3 +1,7 @@
 {
-  "port": 5005
+  "port": 5005,
+  "deploy": {
+    "downloadTimeoutMs": 60000,
+    "publishTimeoutMs": 120000
+  }
 }

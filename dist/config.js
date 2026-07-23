@@ -8,14 +8,24 @@ exports.writeConfig = writeConfig;
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const CONFIG_PATH = path_1.default.join(__dirname, "..", "config.json");
+const DEFAULT_DEPLOY = {
+    downloadTimeoutMs: 60000,
+    publishTimeoutMs: 120000,
+};
 function readConfig() {
+    let raw = {};
     try {
-        return JSON.parse(fs_1.default.readFileSync(CONFIG_PATH, "utf8"));
+        raw = JSON.parse(fs_1.default.readFileSync(CONFIG_PATH, "utf8"));
     }
     catch {
-        return { port: 3000 };
+        // missing/corrupt file → all defaults
     }
+    return {
+        port: raw.port || 3000,
+        deploy: { ...DEFAULT_DEPLOY, ...raw.deploy },
+    };
 }
 function writeConfig(data) {
-    fs_1.default.writeFileSync(CONFIG_PATH, JSON.stringify(data, null, 2));
+    const merged = { ...readConfig(), ...data };
+    fs_1.default.writeFileSync(CONFIG_PATH, JSON.stringify(merged, null, 2));
 }
