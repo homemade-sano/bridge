@@ -8,14 +8,36 @@ export interface DeployConfig {
   publishTimeoutMs: number;
 }
 
+export interface PlacesConfig {
+  createTimeoutMs: number;
+  defaultTemplatePlaceId: number;
+}
+
+export interface StudioConfig {
+  lunePath: string;
+  cookieTimeoutMs: number;
+}
+
 export interface Config {
   port: number;
   deploy: DeployConfig;
+  places: PlacesConfig;
+  studio: StudioConfig;
 }
 
 const DEFAULT_DEPLOY: DeployConfig = {
   downloadTimeoutMs: 60000,
   publishTimeoutMs: 120000,
+};
+
+const DEFAULT_PLACES: PlacesConfig = {
+  createTimeoutMs: 30000,
+  defaultTemplatePlaceId: 95206881,
+};
+
+const DEFAULT_STUDIO: StudioConfig = {
+  lunePath: "lune",
+  cookieTimeoutMs: 15000,
 };
 
 export function readConfig(): Config {
@@ -28,6 +50,8 @@ export function readConfig(): Config {
   return {
     port: raw.port || 3000,
     deploy: { ...DEFAULT_DEPLOY, ...raw.deploy },
+    places: { ...DEFAULT_PLACES, ...raw.places },
+    studio: { ...DEFAULT_STUDIO, ...raw.studio },
   };
 }
 

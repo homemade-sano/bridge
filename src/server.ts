@@ -2,6 +2,7 @@ import express, { Request, Response } from "express";
 import axios, { AxiosRequestConfig } from "axios";
 import { readConfig } from "./config";
 import { handleDeploy } from "./deploy";
+import { handleListPlaces, handleCreatePlace } from "./places";
 
 const app = express();
 const PORT = Number(process.env.PORT) || readConfig().port || 3000;
@@ -105,6 +106,9 @@ app.post("/proxy", async (req: Request, res: Response) => {
 });
 
 app.post("/deploy", handleDeploy);
+
+app.get("/places/list", handleListPlaces);
+app.post("/places/create", handleCreatePlace);
 
 app.get("/health", (_req: Request, res: Response) => res.sendStatus(200));
 

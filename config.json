@@ -3,5 +3,13 @@
   "deploy": {
     "downloadTimeoutMs": 60000,
     "publishTimeoutMs": 120000
+  },
+  "places": {
+    "createTimeoutMs": 30000,
+    "defaultTemplatePlaceId": 95206881
+  },
+  "studio": {
+    "lunePath": "lune",
+    "cookieTimeoutMs": 15000
   }
 }

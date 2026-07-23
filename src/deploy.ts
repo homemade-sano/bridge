@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
-import { execFile } from "child_process";
 import { readConfig } from "./config";
+import { readStudioCookie } from "./robloxAuth";
 
 // POST /deploy
 // Downloads the current source place file (using the local Studio session
@@ -70,27 +70,6 @@ function validate(body: DeployRequestBody): string | null {
     return `versionType must be one of: ${VERSION_TYPES.join(", ")}`;
   }
   return null;
-}
-
-// ---------------------------------------------------------------------------
-// Studio session cookie — read from the Windows registry, kept in memory only.
-// Never logged, never written to disk, never included in a response.
-// ---------------------------------------------------------------------------
-const STUDIO_REG_KEY = "HKCU\\Software\\Roblox\\RobloxStudioBrowser\\roblox.com";
-
-function readStudioCookie(): Promise<string | null> {
-  return new Promise((resolve) => {
-    execFile(
-      "reg",
-      ["query", STUDIO_REG_KEY, "/v", ".ROBLOSECURITY"],
-      (err, stdout) => {
-        if (err) return resolve(null);
-        // Raw value: ,SEC::<YES>,EXP::<...>,COOK::<actual-cookie>
-        const match = stdout.match(/COOK::<([^>]+)>/);
-        resolve(match ? match[1] : null);
-      }
-    );
-  });
 }
 
 // ---------------------------------------------------------------------------

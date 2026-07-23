@@ -12,6 +12,14 @@ const DEFAULT_DEPLOY = {
     downloadTimeoutMs: 60000,
     publishTimeoutMs: 120000,
 };
+const DEFAULT_PLACES = {
+    createTimeoutMs: 30000,
+    defaultTemplatePlaceId: 95206881,
+};
+const DEFAULT_STUDIO = {
+    lunePath: "lune",
+    cookieTimeoutMs: 15000,
+};
 function readConfig() {
     let raw = {};
     try {
@@ -23,6 +31,8 @@ function readConfig() {
     return {
         port: raw.port || 3000,
         deploy: { ...DEFAULT_DEPLOY, ...raw.deploy },
+        places: { ...DEFAULT_PLACES, ...raw.places },
+        studio: { ...DEFAULT_STUDIO, ...raw.studio },
     };
 }
 function writeConfig(data) {

@@ -7,6 +7,7 @@ const express_1 = __importDefault(require("express"));
 const axios_1 = __importDefault(require("axios"));
 const config_1 = require("./config");
 const deploy_1 = require("./deploy");
+const places_1 = require("./places");
 const app = (0, express_1.default)();
 const PORT = Number(process.env.PORT) || (0, config_1.readConfig)().port || 3000;
 app.use(express_1.default.json());
@@ -85,6 +86,8 @@ app.post("/proxy", async (req, res) => {
     }
 });
 app.post("/deploy", deploy_1.handleDeploy);
+app.get("/places/list", places_1.handleListPlaces);
+app.post("/places/create", places_1.handleCreatePlace);
 app.get("/health", (_req, res) => res.sendStatus(200));
 const startTime = Date.now();
 app.get("/status", (_req, res) => {
