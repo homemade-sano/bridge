@@ -108,7 +108,17 @@ async function downloadPlace(
 
   if (!response.ok) {
     const excerpt = (await response.text().catch(() => "")).slice(0, 300);
-    throw new DownloadError(response.status, excerpt);
+    // 401/403 here almost always means the Studio cookie is missing/expired or
+    // the logged-in user can't read this place — surface that, not a raw excerpt.
+    let hint = excerpt;
+    if (response.status === 401 || response.status === 403) {
+      hint =
+        `Studio cookie rejected (HTTP ${response.status}) — the session is expired, ` +
+        `or the logged-in Studio account has no access to place ${placeId}. ${excerpt}`.trim();
+    } else if (response.status === 404) {
+      hint = `place ${placeId} not found (HTTP 404). ${excerpt}`.trim();
+    }
+    throw new DownloadError(response.status, hint);
   }
 
   return Buffer.from(await response.arrayBuffer());
@@ -216,10 +226,14 @@ export async function handleDeploy(req: Request, res: Response): Promise<void> {
 
   const cookie = await readStudioCookie();
   if (!cookie) {
-    console.warn(`[${ts()}] [POST /deploy] 409 no Studio session`);
+    console.warn(
+      `[${ts()}] [POST /deploy] 409 no Studio session cookie ` +
+        `(check the [cookie/*] warnings above — often lune missing or an expired session)`
+    );
     res.status(409).json({
       error:
-        "No Roblox Studio session found on this machine — open Studio and log in.",
+        "No Roblox Studio session cookie available. Make sure Studio is installed " +
+        "and logged in, and that 'lune' is installed and on PATH (or set studio.lunePath in config.json).",
     });
     return;
   }
@@ -230,7 +244,7 @@ export async function handleDeploy(req: Request, res: Response): Promise<void> {
   } catch (err) {
     if (err instanceof DownloadError) {
       console.error(
-        `[${ts()}] [POST /deploy] 502 download of ${body.sourcePlaceId} failed — HTTP ${err.status}`
+        `[${ts()}] [POST /deploy] 502 download of ${body.sourcePlaceId} failed — HTTP ${err.status}: ${err.detail}`
       );
       res.status(502).json({
         error: `Failed to download source place ${body.sourcePlaceId}`,

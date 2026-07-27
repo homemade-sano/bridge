@@ -23,6 +23,13 @@ import { readConfig } from "./config";
 const COOKIE_SCRIPT = path.join(__dirname, "..", "scripts", "getcookie.luau");
 const STUDIO_REG_KEY = "HKCU\\Software\\Roblox\\RobloxStudioBrowser\\roblox.com";
 
+function ts() {
+  return new Date().toISOString();
+}
+
+// Explains WHY a cookie read failed without ever revealing the cookie itself.
+// Only error metadata (codes, stderr) is logged — never stdout, which holds
+// the secret.
 function readCookieViaLune(): Promise<string | null> {
   const { lunePath, cookieTimeoutMs } = readConfig().studio;
   return new Promise((resolve) => {
@@ -30,10 +37,36 @@ function readCookieViaLune(): Promise<string | null> {
       lunePath,
       ["run", COOKIE_SCRIPT],
       { timeout: cookieTimeoutMs, maxBuffer: 4 * 1024 * 1024, windowsHide: true },
-      (err, stdout) => {
-        if (err) return resolve(null);
+      (err, stdout, stderr) => {
+        if (err) {
+          const e = err as NodeJS.ErrnoException;
+          if (e.code === "ENOENT") {
+            console.warn(
+              `[${ts()}] [cookie/lune] lune not found (lunePath="${lunePath}") — ` +
+                `install lune or set studio.lunePath in config.json`
+            );
+          } else if ((e as { killed?: boolean }).killed) {
+            console.warn(
+              `[${ts()}] [cookie/lune] timed out after ${cookieTimeoutMs}ms running ${COOKIE_SCRIPT}`
+            );
+          } else {
+            console.warn(
+              `[${ts()}] [cookie/lune] failed (${e.code ?? "?"}) — ` +
+                `${(stderr || e.message).toString().trim().slice(0, 200)}`
+            );
+          }
+          return resolve(null);
+        }
         const cookie = stdout.trim();
-        resolve(cookie.length > 0 ? cookie : null);
+        if (cookie.length === 0) {
+          console.warn(
+            `[${ts()}] [cookie/lune] lune ran but returned no cookie — ` +
+              `no Studio session on this machine?`
+          );
+          return resolve(null);
+        }
+        console.log(`[${ts()}] [cookie/lune] ok (${cookie.length} chars)`);
+        resolve(cookie);
       }
     );
   });
@@ -46,17 +79,39 @@ function readCookieViaRegistry(): Promise<string | null> {
       ["query", STUDIO_REG_KEY, "/v", ".ROBLOSECURITY"],
       { windowsHide: true },
       (err, stdout) => {
-        if (err) return resolve(null);
+        if (err) {
+          // A missing value is the normal case on recent Studio (cookie moved
+          // to the Windows Credential Manager) — not worth an error, just note it.
+          console.warn(
+            `[${ts()}] [cookie/registry] no cookie in registry ` +
+              `(expected on recent Studio — cookie is DPAPI-encrypted in Credential Manager)`
+          );
+          return resolve(null);
+        }
         // Raw value: ,SEC::<YES>,EXP::<...>,COOK::<actual-cookie>
         const match = stdout.match(/COOK::<([^>]+)>/);
-        resolve(match ? match[1] : null);
+        if (!match) {
+          console.warn(
+            `[${ts()}] [cookie/registry] registry value present but no COOK::<...> field found`
+          );
+          return resolve(null);
+        }
+        console.log(`[${ts()}] [cookie/registry] ok (${match[1].length} chars)`);
+        resolve(match[1]);
       }
     );
   });
 }
 
 export async function readStudioCookie(): Promise<string | null> {
-  return (await readCookieViaLune()) ?? (await readCookieViaRegistry());
+  const cookie = (await readCookieViaLune()) ?? (await readCookieViaRegistry());
+  if (!cookie) {
+    console.warn(
+      `[${ts()}] [cookie] no Studio session cookie from any source ` +
+        `(lune + registry both failed — see warnings above)`
+    );
+  }
+  return cookie;
 }
 
 // ---------------------------------------------------------------------------
