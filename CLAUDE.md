@@ -68,6 +68,19 @@ Endpoints:
 
 Network-level errors (timeout, unreachable) return HTTP 500 with `StatusCode: 0`.
 
+**`POST /clipboard`** — put text into the Windows clipboard (Roblox scripts can't; `setclipboard` is CoreScript-only). Body: `{ "Text": "..." }` (non-empty). Response: `{ "ok": true, "length": n }`. Implemented via PowerShell `Set-Clipboard`, text passed as base64 over stdin (UTF-8 safe).
+
+**API-key store** (`src/apikeys.ts`) — secrets encrypted with Windows DPAPI (CurrentUser scope) via PowerShell; encrypted blobs in `%LOCALAPPDATA%\RobloxBridge\apikeys.json`. Plaintext never on disk, never logged, never on a command line (base64 over stdin/stdout).
+
+| Endpoint | Input | Response |
+|----------|-------|----------|
+| `POST /api-key` | `{ "Name": "...", "Key": "..." }` | `{ ok, name, overwritten }` |
+| `GET /api-key?name=...` | — | `{ name, key }` (404 if unknown) |
+| `DELETE /api-key?name=...` | — | `{ ok, name }` |
+| `GET /api-key/list` | — | `{ names: [...] }` (never values) |
+
+Name must match `[A-Za-z0-9._-]{1,64}`. Note: anything running on this machine can hit `127.0.0.1` and read keys — DPAPI protects against other Windows users and file exfiltration, not local processes.
+
 ## Roblox plugin usage
 
 ```lua

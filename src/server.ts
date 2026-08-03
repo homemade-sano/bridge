@@ -3,11 +3,19 @@ import axios, { AxiosRequestConfig } from "axios";
 import { readConfig } from "./config";
 import { handleDeploy } from "./deploy";
 import { handleListPlaces, handleCreatePlace } from "./places";
+import { handleClipboard } from "./clipboard";
+import {
+  handleSetApiKey,
+  handleGetApiKey,
+  handleDeleteApiKey,
+  handleListApiKeys,
+} from "./apikeys";
 
 const app = express();
 const PORT = Number(process.env.PORT) || readConfig().port || 3000;
 
-app.use(express.json());
+// 5mb: clipboard payloads and proxied bodies can exceed the 100kb default
+app.use(express.json({ limit: "5mb" }));
 
 interface ProxyRequestBody {
   Url: string;
@@ -109,6 +117,13 @@ app.post("/deploy", handleDeploy);
 
 app.get("/places/list", handleListPlaces);
 app.post("/places/create", handleCreatePlace);
+
+app.post("/clipboard", handleClipboard);
+
+app.get("/api-key/list", handleListApiKeys);
+app.get("/api-key", handleGetApiKey);
+app.post("/api-key", handleSetApiKey);
+app.delete("/api-key", handleDeleteApiKey);
 
 app.get("/health", (_req: Request, res: Response) => res.sendStatus(200));
 
