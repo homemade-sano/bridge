@@ -7,7 +7,8 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "dev": "tsc --watch",
-    "deploy": "npm run build && pm2 restart bridge bridge-tray"
+    "deploy": "npm run build && pm2 restart bridge bridge-tray",
+    "deploy:mac": "sh scripts/macos-service.sh deploy"
   },
   "keywords": [],
   "author": "",

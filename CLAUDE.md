@@ -36,6 +36,8 @@ pm2 restart bridge        # restart after code change
 
 At login, `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\RobloxBridge.vbs` runs `pm2 resurrect` which restores both processes.
 
+macOS: `scripts/macos-service.sh` (install|deploy|status|uninstall). The bridge runs from a copy in `~/Library/Application Support/RobloxBridge/app` (launchd can't read `~/Documents`), so redeploy with `npm run deploy:mac` — `config.json` there is the live one. LaunchAgent `com.robloxbridge.watchdog` runs `scripts/watchdog.sh` at login + every 30s (restarts/resurrects on failed `/health`). macOS tray = native menu bar binary from `macos/BridgeMenu.swift` (systray2's darwin binary is x86_64-only), compiled by deploy to `<app>/bin/bridge-menu`, run by pm2 as `bridge-tray`. Its pm2 `script` must stay relative — pm2 wraps paths containing spaces in `bash -c`.
+
 ### `src/server.ts`
 
 Endpoints:
@@ -68,9 +70,11 @@ Endpoints:
 
 Network-level errors (timeout, unreachable) return HTTP 500 with `StatusCode: 0`.
 
-**`POST /clipboard`** — put text into the Windows clipboard (Roblox scripts can't; `setclipboard` is CoreScript-only). Body: `{ "Text": "..." }` (non-empty). Response: `{ "ok": true, "length": n }`. Implemented via PowerShell `Set-Clipboard`, text passed as base64 over stdin (UTF-8 safe).
+**`POST /clipboard`** — put text into the OS clipboard (Roblox scripts can't; `setclipboard` is CoreScript-only). Body: `{ "Text": "..." }` (non-empty). Response: `{ "ok": true, "length": n }`. Windows: PowerShell `Set-Clipboard`, text passed as base64 over stdin (UTF-8 safe). macOS: `pbcopy` over stdin with `LANG=en_US.UTF-8`.
 
-**API-key store** (`src/apikeys.ts`) — secrets encrypted with Windows DPAPI (CurrentUser scope) via PowerShell; encrypted blobs in `%LOCALAPPDATA%\RobloxBridge\apikeys.json`. Plaintext never on disk, never logged, never on a command line (base64 over stdin/stdout).
+**API-key store** (`src/apikeys.ts`) — plaintext never on disk, never logged, never on a command line (child processes spawned via `src/proc.ts`, data over stdin/stdout).
+- Windows: DPAPI (CurrentUser scope) via PowerShell; blobs in `%LOCALAPPDATA%\RobloxBridge\apikeys.json`.
+- macOS: AES-256-GCM, master key in the login Keychain (service `RobloxBridge`, account `apikeys-master-key`, created on first use via `security -i`); blobs in `~/Library/Application Support/RobloxBridge/apikeys.json`. Deleting the Keychain item makes existing blobs undecryptable.
 
 | Endpoint | Input | Response |
 |----------|-------|----------|
@@ -79,7 +83,7 @@ Network-level errors (timeout, unreachable) return HTTP 500 with `StatusCode: 0`
 | `DELETE /api-key?name=...` | — | `{ ok, name }` |
 | `GET /api-key/list` | — | `{ names: [...] }` (never values) |
 
-Name must match `[A-Za-z0-9._-]{1,64}`. Note: anything running on this machine can hit `127.0.0.1` and read keys — DPAPI protects against other Windows users and file exfiltration, not local processes.
+Name must match `[A-Za-z0-9._-]{1,64}`. Note: anything running on this machine can hit `127.0.0.1` and read keys — DPAPI/Keychain protect against other OS users and file exfiltration, not local processes.
 
 ## Roblox plugin usage
 

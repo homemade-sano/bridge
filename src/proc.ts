@@ -1,27 +1,24 @@
 import { spawn } from "child_process";
 
-// Shared PowerShell runner for Windows-only features (clipboard, DPAPI).
+// Shared child-process runner for OS-specific features (clipboard, secret
+// storage): PowerShell on Windows, pbcopy / security on macOS.
 //
 // Data crosses process boundaries via stdin/stdout only — never on the
-// command line, where it would be visible in Task Manager / process lists.
-// Callers pass base64 through both directions to sidestep console encoding
-// (PS 5.1 console I/O is not UTF-8 by default).
+// command line, where it would be visible in Task Manager / `ps` output.
 
-export function runPowerShell(
-  script: string,
+export function runProcess(
+  command: string,
+  args: string[],
   stdin: string,
-  timeoutMs: number
+  timeoutMs: number,
+  env?: NodeJS.ProcessEnv
 ): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = spawn(
-      "powershell",
-      ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script],
-      { windowsHide: true }
-    );
+    const child = spawn(command, args, { windowsHide: true, env });
 
     const timer = setTimeout(() => {
       child.kill();
-      reject(new Error(`powershell timed out after ${timeoutMs}ms`));
+      reject(new Error(`${command} timed out after ${timeoutMs}ms`));
     }, timeoutMs);
 
     let stdout = "";
@@ -37,11 +34,26 @@ export function runPowerShell(
       if (code === 0) {
         resolve(stdout.trim());
       } else {
-        reject(new Error(stderr.trim().slice(0, 300) || `powershell exited with code ${code}`));
+        reject(new Error(stderr.trim().slice(0, 300) || `${command} exited with code ${code}`));
       }
     });
 
     child.stdin.write(stdin);
     child.stdin.end();
   });
+}
+
+// Callers pass base64 through both directions to sidestep console encoding
+// (PS 5.1 console I/O is not UTF-8 by default).
+export function runPowerShell(
+  script: string,
+  stdin: string,
+  timeoutMs: number
+): Promise<string> {
+  return runProcess(
+    "powershell",
+    ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script],
+    stdin,
+    timeoutMs
+  );
 }

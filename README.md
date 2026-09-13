@@ -59,6 +59,33 @@ pm2 save
 
 `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\RobloxBridge.vbs` must call `pm2 resurrect`.
 
+## macOS (always-on)
+
+```bash
+sh scripts/macos-service.sh install    # once: deploy + pm2-logrotate + watchdog
+npm run deploy:mac                     # after a code change
+sh scripts/macos-service.sh status
+sh scripts/macos-service.sh uninstall
+```
+
+- launchd jobs cannot read `~/Documents` (TCC), so the app runs from a copy in
+  `~/Library/Application Support/RobloxBridge/app`. **`config.json` is read
+  from there** (seeded once from the repo). Rebuilding in the repo does nothing
+  until `deploy:mac`.
+- Crash → pm2 restarts it (exponential backoff, never gives up); >300MB → restart.
+- LaunchAgent `com.robloxbridge.watchdog` runs `scripts/watchdog.sh` at login
+  and every 30s: if `/health` fails twice it runs `pm2 restart bridge`, or
+  `pm2 resurrect` if pm2 itself died (reboot, `pm2 kill`). Recovery actions are
+  logged to `~/Library/Logs/RobloxBridge/watchdog.log`.
+- `pm2 stop bridge` is undone by the watchdog within 30s — use `uninstall` to
+  really stop it.
+- Nothing runs while the Mac sleeps; the watchdog checks again on wake.
+- Menu bar item (`bridge-tray`, native Swift in `macos/BridgeMenu.swift`,
+  compiled on deploy — needs Xcode Command Line Tools): status, Change Port
+  (writes the deployed `config.json` + restarts), Open Logs (Terminal with
+  `pm2 logs bridge`), Open Watchdog Log (Console), Restart Bridge, Quit.
+  systray2's macOS binary is x86_64-only, hence no `dist/tray.js` on macOS.
+
 ## Config
 
 Stored in `config.json`:
