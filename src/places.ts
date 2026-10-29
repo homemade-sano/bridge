@@ -462,8 +462,9 @@ export async function handlePlaceVersions(req: Request, res: Response): Promise<
 // ---------------------------------------------------------------------------
 // POST /places/extract
 // Body: { placeId, version: "saved"|"published", paths: ["ReplicatedStorage.Contents", ...] }
-// → { placeId, resolved, items: [{ path, ok, dataBase64?, sizeBytes?, detail? }] }
-// Each found path is serialized to a binary .rbxm (scripts/extract.luau).
+// → { placeId, resolved, items: [{ path, ok, roots?, dataBase64?, sizeBytes?, detail? }] }
+// Each found path is serialized to a binary .rbxm (scripts/extract.luau);
+// "MaterialService" = all its MaterialVariants as one multi-root .rbxm.
 // ---------------------------------------------------------------------------
 interface ExtractRequestBody {
   placeId: number;
@@ -474,6 +475,7 @@ interface ExtractRequestBody {
 interface ExtractItem {
   path: string;
   ok: boolean;
+  roots?: number;
   file?: string;
   detail?: string;
 }
@@ -533,7 +535,13 @@ export async function handleExtract(req: Request, res: Response): Promise<void> 
             return { path: item.path, ok: false, detail: item.detail };
           }
           const data = await fs.promises.readFile(item.file);
-          return { path: item.path, ok: true, dataBase64: data.toString("base64"), sizeBytes: data.length };
+          return {
+            path: item.path,
+            ok: true,
+            roots: item.roots,
+            dataBase64: data.toString("base64"),
+            sizeBytes: data.length,
+          };
         })
       );
     });

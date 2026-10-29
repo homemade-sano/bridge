@@ -4,9 +4,11 @@
 -- usage: lune run extract.luau <place.rbxl> <outDir> <path> [<path> ...]
 --   path = dot-separated from the DataModel, e.g. "ReplicatedStorage.Contents"
 --   (names containing dots are not addressable).
+--   "MaterialService" = all its MaterialVariant descendants as ONE multi-root
+--   .rbxm (the service itself and its overrides are not included).
 --
 -- Writes <outDir>/<i>.rbxm for each found path (i = 1-based arg index) and
--- prints one JSON line on stdout: [{ path, ok, file?, detail? }]
+-- prints one JSON line on stdout: [{ path, ok, roots?, file?, detail? }]
 local roblox = require("@lune/roblox")
 local fs = require("@lune/fs")
 local serde = require("@lune/serde")
@@ -30,13 +32,24 @@ end
 local items = {}
 for i = 3, #process.args do
 	local path = process.args[i]
+	local file = `{outDir}/{i - 2}.rbxm`
+	if path == "MaterialService" then
+		local variants = {}
+		for _, d in game:GetService("MaterialService"):GetDescendants() do
+			if d.ClassName == "MaterialVariant" then
+				table.insert(variants, d)
+			end
+		end
+		fs.writeFile(file, roblox.serializeModel(variants))
+		table.insert(items, { path = path, ok = true, roots = #variants, file = file })
+		continue
+	end
 	local instance, detail = resolve(path)
 	if instance == nil or instance == game then
 		table.insert(items, { path = path, ok = false, detail = detail or "empty path" })
 	else
-		local file = `{outDir}/{i - 2}.rbxm`
 		fs.writeFile(file, roblox.serializeModel({ instance }))
-		table.insert(items, { path = path, ok = true, file = file })
+		table.insert(items, { path = path, ok = true, roots = 1, file = file })
 	end
 end
 
