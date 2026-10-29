@@ -70,6 +70,14 @@ Endpoints:
 
 Network-level errors (timeout, unreachable) return HTTP 500 with `StatusCode: 0`.
 
+A bridge-level `x-api-key` header (on the hop to the bridge) is injected upstream; inner `Headers` win on conflict.
+
+**`POST /proxy/multipart`** — same envelope as `/proxy`, but the bridge builds the multipart/form-data body so binary parts survive. Body: `{ Url, Method?="POST", Headers?, Timeout?, Fields?: {name: string|number|boolean}, Files?: [{ name, filename, contentType?, dataBase64 }] }`. Any `Content-Type` in `Headers` is dropped (boundary generated). JSON body limit is 20mb.
+
+**`POST /deploy`** (x-api-key = Open Cloud key) — v1: `{ sourcePlaceId, targets:[{name, universeId, placeId}], versionType? }` publishes the source's latest saved version to each target. v2 (any target has `code`): per target `code: {placeId, version:"saved"|"published"} | "keep"` and `map: {…} | "keep" | "none"`; "keep" = the target's own published version. The map's Workspace + Terrain are grafted into the code place by `scripts/assemble.luau` (Lune), all downloads + assemblies happen before the first publish, failures are per target (422 = base without `ReplicatedStorage.Contents`). Handlers in `src/deploy.ts`; version lookup/download/Lune runner in `src/placeFiles.ts`. Without `&version=`, assetdelivery serves the latest SAVED version.
+
+**`GET /places/versions?placeId=`** → `{ placeId, saved, published? }` (`{version, updated}` each). **`POST /places/extract`** `{ placeId, version, paths }` → `{ placeId, resolved, items:[{path, ok, dataBase64?, sizeBytes?, detail?}] }` (.rbxm via `scripts/extract.luau`). Both use the Studio cookie (develop.roblox.com version history, deprecated by Roblox in favor of Open Cloud Assets).
+
 **`POST /clipboard`** — put text into the OS clipboard (Roblox scripts can't; `setclipboard` is CoreScript-only). Body: `{ "Text": "..." }` (non-empty). Response: `{ "ok": true, "length": n }`. Windows: PowerShell `Set-Clipboard`, text passed as base64 over stdin (UTF-8 safe). macOS: `pbcopy` over stdin with `LANG=en_US.UTF-8`.
 
 **API-key store** (`src/apikeys.ts`) — plaintext never on disk, never logged, never on a command line (child processes spawned via `src/proc.ts`, data over stdin/stdout).

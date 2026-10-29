@@ -6,6 +6,8 @@ const CONFIG_PATH = path.join(__dirname, "..", "config.json");
 export interface DeployConfig {
   downloadTimeoutMs: number;
   publishTimeoutMs: number;
+  // Lune scripts (assembly, extraction) on downloaded place files
+  luneTimeoutMs: number;
 }
 
 export interface PlacesConfig {
@@ -28,6 +30,7 @@ export interface Config {
 const DEFAULT_DEPLOY: DeployConfig = {
   downloadTimeoutMs: 60000,
   publishTimeoutMs: 120000,
+  luneTimeoutMs: 120000,
 };
 
 const DEFAULT_PLACES: PlacesConfig = {

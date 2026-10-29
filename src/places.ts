@@ -1,6 +1,18 @@
+import fs from "fs";
+import path from "path";
 import { Request, Response } from "express";
 import { readConfig } from "./config";
 import { readStudioCookie, csrfFetch } from "./robloxAuth";
+import {
+  VersionKind,
+  VERSION_KINDS,
+  PlaceFetchError,
+  getPlaceVersions,
+  fetchPlaceVersion,
+  runLuneScript,
+  asArray,
+  withTempDir,
+} from "./placeFiles";
 
 // GET  /places/list?universeId={id}   — list places of a universe
 // POST /places/create                 — create a place in a universe
@@ -404,4 +416,135 @@ export async function handleCreatePlace(req: Request, res: Response): Promise<vo
     renamed,
     ...(renameDetail ? { renameDetail } : {}),
   });
+}
+
+// ---------------------------------------------------------------------------
+// GET /places/versions?placeId={id}
+// → { placeId, saved: { version, updated }, published?: { version, updated } }
+// Studio cookie (develop.roblox.com version history).
+// ---------------------------------------------------------------------------
+export async function handlePlaceVersions(req: Request, res: Response): Promise<void> {
+  const placeId = Number(req.query.placeId);
+  if (!isId(placeId)) {
+    console.warn(`[${ts()}] [GET /places/versions] 400 bad placeId`);
+    res.status(400).json({ error: "placeId query param must be a positive integer" });
+    return;
+  }
+
+  const cookie = await readStudioCookie();
+  if (!cookie) {
+    console.warn(`[${ts()}] [GET /places/versions] 409 no Studio session`);
+    res.status(409).json({ error: "No Roblox Studio session found — open Studio and log in." });
+    return;
+  }
+
+  try {
+    const { saved, published } = await getPlaceVersions(
+      placeId,
+      cookie,
+      readConfig().deploy.downloadTimeoutMs
+    );
+    console.log(
+      `[${ts()}] [GET /places/versions] place=${placeId} saved=${saved?.version} published=${published?.version}`
+    );
+    res.json({ placeId, saved, ...(published ? { published } : {}) });
+  } catch (err) {
+    if (err instanceof PlaceFetchError) {
+      console.warn(`[${ts()}] [GET /places/versions] ${err.status} place=${placeId} — ${err.detail}`);
+      res.status(err.status).json({ error: err.detail });
+    } else {
+      console.error(`[${ts()}] [GET /places/versions] error — ${(err as Error).message}`);
+      res.status(502).json({ error: (err as Error).message });
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// POST /places/extract
+// Body: { placeId, version: "saved"|"published", paths: ["ReplicatedStorage.Contents", ...] }
+// → { placeId, resolved, items: [{ path, ok, dataBase64?, sizeBytes?, detail? }] }
+// Each found path is serialized to a binary .rbxm (scripts/extract.luau).
+// ---------------------------------------------------------------------------
+interface ExtractRequestBody {
+  placeId: number;
+  version: VersionKind;
+  paths: string[];
+}
+
+interface ExtractItem {
+  path: string;
+  ok: boolean;
+  file?: string;
+  detail?: string;
+}
+
+export async function handleExtract(req: Request, res: Response): Promise<void> {
+  const body = req.body as ExtractRequestBody;
+
+  const fail = (error: string) => {
+    console.warn(`[${ts()}] [POST /places/extract] 400 ${error}`);
+    res.status(400).json({ error });
+  };
+  if (!isId(body.placeId)) return fail("placeId must be a positive integer");
+  if (!VERSION_KINDS.includes(body.version)) {
+    return fail(`version must be one of: ${VERSION_KINDS.join(", ")}`);
+  }
+  if (
+    !Array.isArray(body.paths) ||
+    body.paths.length === 0 ||
+    !body.paths.every((p) => typeof p === "string" && p.length > 0)
+  ) {
+    return fail("paths must be a non-empty array of non-empty strings");
+  }
+
+  const cookie = await readStudioCookie();
+  if (!cookie) {
+    console.warn(`[${ts()}] [POST /places/extract] 409 no Studio session`);
+    res.status(409).json({ error: "No Roblox Studio session found — open Studio and log in." });
+    return;
+  }
+
+  const { downloadTimeoutMs, luneTimeoutMs } = readConfig().deploy;
+
+  let resolved: number;
+  let file: Buffer;
+  try {
+    ({ resolved, file } = await fetchPlaceVersion(body.placeId, body.version, cookie, downloadTimeoutMs));
+  } catch (err) {
+    const status = err instanceof PlaceFetchError ? err.status : 0;
+    const detail = err instanceof PlaceFetchError ? err.detail : (err as Error).message;
+    console.error(`[${ts()}] [POST /places/extract] 502 download of ${body.placeId} failed — ${detail}`);
+    res.status(502).json({ error: `Failed to download place ${body.placeId}`, status, detail });
+    return;
+  }
+
+  try {
+    const items = await withTempDir(async (dir) => {
+      const placePath = path.join(dir, "place.rbxl");
+      await fs.promises.writeFile(placePath, file);
+      const extracted = await runLuneScript<ExtractItem[]>(
+        "extract.luau",
+        [placePath, dir, ...body.paths],
+        luneTimeoutMs
+      );
+      return Promise.all(
+        asArray<ExtractItem>(extracted).map(async (item) => {
+          if (!item.ok || !item.file) {
+            return { path: item.path, ok: false, detail: item.detail };
+          }
+          const data = await fs.promises.readFile(item.file);
+          return { path: item.path, ok: true, dataBase64: data.toString("base64"), sizeBytes: data.length };
+        })
+      );
+    });
+
+    console.log(
+      `[${ts()}] [POST /places/extract] place=${body.placeId} ${body.version} v${resolved} ` +
+        items.map((i) => `${i.path}=${i.ok ? `${i.sizeBytes}B` : "missing"}`).join(" ")
+    );
+    res.json({ placeId: body.placeId, resolved, items });
+  } catch (err) {
+    console.error(`[${ts()}] [POST /places/extract] 500 extraction failed — ${(err as Error).message}`);
+    res.status(500).json({ error: `extraction failed: ${(err as Error).message}` });
+  }
 }
