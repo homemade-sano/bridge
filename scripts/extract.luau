@@ -4,8 +4,9 @@
 -- usage: lune run extract.luau <place.rbxl> <outDir> <path> [<path> ...]
 --   path = dot-separated from the DataModel, e.g. "ReplicatedStorage.Contents"
 --   (names containing dots are not addressable).
---   "MaterialService" = all its MaterialVariant descendants as ONE multi-root
---   .rbxm (the service itself and its overrides are not included).
+--   "MaterialService" = the base's MaterialVariants: every descendant outside a
+--   top-level "Maps" folder (a map's own variants), as ONE flat multi-root .rbxm
+--   (the service, its folders and its overrides are not included).
 --
 -- Writes <outDir>/<i>.rbxm for each found path (i = 1-based arg index) and
 -- prints one JSON line on stdout: [{ path, ok, roots?, file?, detail? }]
@@ -35,9 +36,16 @@ for i = 3, #process.args do
 	local file = `{outDir}/{i - 2}.rbxm`
 	if path == "MaterialService" then
 		local variants = {}
-		for _, d in game:GetService("MaterialService"):GetDescendants() do
-			if d.ClassName == "MaterialVariant" then
-				table.insert(variants, d)
+		for _, child in game:GetService("MaterialService"):GetChildren() do
+			if child.Name ~= "Maps" then
+				if child.ClassName == "MaterialVariant" then
+					table.insert(variants, child)
+				end
+				for _, d in child:GetDescendants() do
+					if d.ClassName == "MaterialVariant" then
+						table.insert(variants, d)
+					end
+				end
 			end
 		end
 		fs.writeFile(file, roblox.serializeModel(variants))

@@ -182,8 +182,10 @@ function respondNoCookie(res: Response): void {
 //                   map:  { placeId, version: "saved"|"published" } | "keep" | "none" }]
 //
 // "keep" = the target's own current published version. The base is the code
-// place; unless map is "none", the map place's Workspace + Terrain and its
-// MaterialService variants/overrides are grafted in (scripts/assemble.luau). Downloads are deduplicated by (placeId, version)
+// place; unless map is "none", the map place's Workspace.Maps + Terrain, its
+// MaterialService.Maps variants and its overrides are grafted in, and in every
+// case MaterialService is rebuilt from what the place uses (merges, pruning —
+// scripts/assemble.luau). Downloads are deduplicated by (placeId, version)
 // and ALL downloads + assemblies finish before the first publish. A failed
 // download/assembly only fails the targets that need it.
 // ---------------------------------------------------------------------------
@@ -211,6 +213,9 @@ interface TargetV2Result extends TargetResult {
   outputSizeBytes?: number;
   mapClassTagged?: number;
   materialVariantsAdded?: number;
+  materialVariantsMerged?: number;
+  materialVariantsRemoved?: number;
+  partsRewritten?: number;
   warnings: string[];
 }
 
@@ -228,6 +233,9 @@ interface AssembleResult {
   assembled: boolean;
   tagged: number;
   materialVariantsAdded: number;
+  materialVariantsMerged: number;
+  materialVariantsRemoved: number;
+  partsRewritten: number;
   warnings: unknown;
 }
 
@@ -422,6 +430,9 @@ async function handleDeployV2(
       if (assembly.assembled) {
         result.mapClassTagged = assembly.tagged;
         result.materialVariantsAdded = assembly.materialVariantsAdded;
+        result.materialVariantsMerged = assembly.materialVariantsMerged;
+        result.materialVariantsRemoved = assembly.materialVariantsRemoved;
+        result.partsRewritten = assembly.partsRewritten;
       }
       entry.outPath = assembly.assembled ? outPath : code.path;
     }
